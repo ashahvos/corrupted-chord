@@ -1,0 +1,286 @@
+\documentclass[10pt,letterpaper]{article}
+% ---------------------------------------------------------------- packages
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{siunitx}
+\usepackage{xcolor}
+\usepackage[font=small,labelfont=bf,skip=6pt]{caption}
+\usepackage{rotating}
+\usepackage{placeins}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black]{hyperref}
+\hypersetup{pdftitle={The Corrupted Chord Electric Guitar}, pdfauthor={Andrew Shahvosian}}
+\usepackage[capitalise,noabbrev]{cleveref}
+
+\sisetup{range-phrase=\text{--}, range-units=single, per-mode=symbol, uncertainty-mode=separate}
+\newcommand{\projectname}{The Corrupted Chord Electric Guitar}
+\newcommand{\sharpn}[1]{#1$\sharp$}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.8em}{}
+\titlespacing*{\section}{0pt}{1.8ex plus 0.5ex minus 0.2ex}{0.9ex}
+\titlespacing*{\subsection}{0pt}{1.4ex plus 0.4ex minus 0.2ex}{0.5ex}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\projectname}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\small\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+\renewcommand{\arraystretch}{1.15}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.08}
+\renewcommand{\floatpagefraction}{0.8}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{4}
+\setlength{\textfloatsep}{12pt plus 2pt minus 4pt}
+\setlength{\floatsep}{10pt plus 2pt minus 2pt}
+
+\begin{document}
+% ---------------------------------------------------------------- title block
+\thispagestyle{plain}
+\begin{center}
+  {\LARGE\bfseries \projectname}\\[10pt]
+  {\normalsize Andrew Shahvosian}\\[2pt]
+  {\small November 2026}
+\end{center}
+
+\begin{center}
+  \includegraphics[width=\textwidth]{figures/render3d_pair.png}
+  \captionof{figure}{The \qtyproduct{1.4 x 0.9}{in} four-layer board in KiCad's 3D viewer. The two 25-turn trimmers tune the notch, and the headers along the top edge carry the battery, the on/off switch, the input and the output.}
+  \label{fig:hero}
+\end{center}
+
+\begin{abstract}
+\noindent This project adds a battery-powered analog notch filter to an electric guitar that removes the fundamental of the open G string (G3, \SI{196.00}{\hertz}) while leaving the neighbouring notes intact. A $\times10$ gain stage drives a bootstrapped twin-T network with $Q = \num{36.4}$, and a charge pump derives the negative rail from a single \SI{9}{\volt} battery, all on a \qtyproduct{1.4 x 0.9}{in} four-layer board. A nodal model of the board's netlist predicts \SI{38.8}{\decibel} of attenuation at \SI{196}{\hertz} and less than \SI{0.4}{\decibel} at the adjacent semitones, and a breadboard prototype suppressed a \SI{196}{\hertz} tone by about \SI{29}{\decibel}.
+\end{abstract}
+
+% ---------------------------------------------------------------- 1
+\section{Introduction}
+The module sits between an electric guitar's pickup and its amplifier and suppresses the fundamental of one unfretted string by at least \SI{20}{\decibel} without affecting the other notes. The target is the open third string, G3, which is \SI{196.00}{\hertz} in equal temperament with A4 at \SI{440}{\hertz}. Removing the fundamental leaves the string's harmonics at \SIlist{392;588;784}{\hertz} and above intact, so a G in a chord loses its foundation while its upper partials still ring. That altered chord is what the project's name refers to. The op-amps run from dual rails derived from one \SI{9}{\volt} battery, two \SI{5}{\kilo\ohm} trimmers tune the notch, component values come from a limited stock list, and the board measures \qtyproduct{1.4 x 0.9}{in} (\cref{tab:requirements}).
+
+\begin{table}[!tb]
+  \centering\small
+  \begin{tabular}{C{4.4cm}C{5.4cm}}
+    \toprule
+    \textbf{Requirement} & \textbf{This design} \\
+    \midrule
+    Notch an open-string fundamental & G3 at \SI{196.00}{\hertz} \\
+    At least \SI{20}{\decibel} suppression & \SI{38.8}{\decibel} (model); about \SI{29}{\decibel} (breadboard) \\
+    Neighbouring notes unaffected & \SI{0.12}{\decibel} / \SI{0.34}{\decibel} loss at \sharpn{F}3 / \sharpn{G}3 (model) \\
+    Dual rails from a \SI{9}{\volt} battery & TC7660 charge pump, $V_- \approx \SI{-9}{\volt}$ \\
+    Two \SI{5}{\kilo\ohm} trimmers for $R$ and $R/2$ & VR1, VR2: Bourns 3296W, 25-turn \\
+    PCB \qtyproduct{1.4 x 0.9}{in} & \qtyproduct{35.56 x 22.86}{\milli\metre}, four layers \\
+    \bottomrule
+  \end{tabular}
+  \caption{Design requirements and how they are met. ``Model'' marks predictions from \cref{sec:analysis}, and the breadboard figure is from \cref{sec:verify}.}
+  \label{tab:requirements}
+\end{table}
+
+% ---------------------------------------------------------------- 2
+\section{System architecture}\label{sec:arch}
+\Cref{fig:block} shows the signal chain. One section of an LM324 quad op-amp amplifies the pickup signal ten times. A passive twin-T network then creates a transmission null at \SI{196}{\hertz}, a second section buffers its output, and a \SI{10}{\micro\farad} capacitor AC-couples the result to the amplifier. A third section closes a positive-feedback loop. Instead of grounding the twin-T's common node, it drives that node with a fixed fraction $k$ of the output set by the divider R4/R5. This bootstrap is what makes the notch narrow enough for music. The fourth section is unused. The power section switches the battery on its negative terminal, lights an indicator LED, and inverts $V_+$ with a TC7660 charge pump to make $V_-$.
+
+\begin{figure}[!tb]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig_block_diagram.pdf}
+  \caption{Block diagram. Solid arrows are the audio path, dashed arrows the bootstrap loop that sets $Q$. Designators match the schematic (\cref{fig:schematic}).}
+  \label{fig:block}
+\end{figure}
+
+% ---------------------------------------------------------------- 3
+\section{Circuit design}\label{sec:circuit}
+\subsection{Power}
+The battery's positive terminal (header J2) is the $V_+$ rail, and its negative terminal returns to ground through the push-button switch on J1. The TC7660 inverts $V_+$ with C2 as its flying capacitor and C4 as its output reservoir, while C3 bypasses its input. The datasheet allows \SIrange{3}{10}{\volt} with the LV pin open, so LV and OSC are left unconnected and the internal oscillator runs at its nominal \SI{10}{\kilo\hertz}~\cite{tc7660}. With a typical source resistance of \SI{70}{\ohm} and about \SI{1}{\milli\ampere} of load, $V_-$ sits within about \SI{0.1}{\volt} of $-V_+$. A fresh alkaline cell near \SI{9.5}{\volt} is inside the \SI{10}{\volt} limit, but with little margin. The LED D1 is mounted off-board through a 2-pin header, and R1 (\SI{1}{\kilo\ohm}) sets its current to about \SI{7}{\milli\ampere} for a typical \SI{2}{\volt} LED. The LM324 draws about \SI{0.7}{\milli\ampere}~\cite{lm324}, and the charge pump draws a similar current again to supply the negative rail, so the total is roughly \SI{9}{\milli\ampere}, about \SI{80}{\percent} of it in the LED.
+
+\subsection{Gain stage}
+Section U2C is a non-inverting amplifier with $R_7 = \SI{9}{\kilo\ohm}$ in the feedback path and $R_6 = \SI{1}{\kilo\ohm}$ to ground:
+\begin{equation}
+  G = 1 + \frac{R_7}{R_6},
+\end{equation}
+so $G = 10$, or \SI{20.0}{\decibel}. Amplifying before the notch lifts the pickup's signal well above the offset and noise of the later stages. The LM324's output reaches only about \SI{1.5}{\volt} below $V_+$~\cite{lm324}, so with a \SI{9}{\volt} supply the stage clips for input peaks above about \SI{0.75}{\volt}.
+
+\subsection{Twin-T network}
+A twin-T places two T-sections in parallel. In the resistive T, series resistors $R_A$ and $R_B$ have a shunt capacitor $C_S$ to the common node. In the capacitive T, series capacitors $C_A$ and $C_B$ have a shunt resistor $R_S$. The first T is a low-pass filter and the second a high-pass filter, and at one frequency their outputs are equal and opposite and cancel. With $R_A = R_B = R$, $C_A = C_B = C$, $C_S = 2C$ and $R_S = R/2$, the null falls at
+\begin{equation}
+  f_0 = \frac{1}{2\pi R C}.
+\end{equation}
+$C$ was fixed first at a stock value of \SI{0.22}{\micro\farad} (C1, C5), with $C_S$ made from two in parallel (C6\,$\parallel$\,C7 = \SI{0.44}{\micro\farad}). For \SI{196}{\hertz} this requires $R = 1/(2\pi \cdot 196 \cdot \SI{0.22}{\micro\farad}) = \SI{3.691}{\kilo\ohm}$. The fixed arm $R_B$ is R2 + R3 = \SI{3.3}{\kilo\ohm} + \SI{470}{\ohm} = \SI{3.77}{\kilo\ohm}. Trimmer VR1 is set so that the two arms average to $R$, giving $R_A = 2R - R_B = \SI{3.612}{\kilo\ohm}$, and trimmer VR2 provides $R_S = R/2 = \SI{1.8455}{\kilo\ohm}$ (\cref{tab:values}).
+
+Because $R_A \neq R_B$, it is worth checking this approximation. Requiring the currents that the two T-sections deliver into the unloaded output to cancel gives one condition from the real part and one from the imaginary part:
+\begin{equation}
+  \omega^2 = \frac{1}{C_A C_B R_S (R_A + R_B)}, \qquad
+  \omega^2 = \frac{C_A + C_B}{C_A C_B C_S R_A R_B}.
+  \label{eq:null}
+\end{equation}
+A perfect null needs both at the same frequency. With equal capacitors and $C_S = C_A + C_B$, that happens when $R_S = R_A \parallel R_B$, and the null then sits at $1/(2\pi C\sqrt{R_A R_B})$. Here $R_A \parallel R_B = \SI{1.8447}{\kilo\ohm}$, so the nominal VR2 setting is \SI{0.85}{\ohm} (\SI{0.046}{\percent}) high and the null is deep but finite. The two conditions put it at \SI{196.00}{\hertz} and \SI{196.04}{\hertz}. \Cref{eq:null} also shows how the trimmers divide the work. The imaginary-part condition contains $R_A$ but not $R_S$, so VR1 chooses the frequency. VR2 appears only in the real-part condition, so it sets the depth.
+
+\begin{table}[!tb]
+  \centering\small
+  \begin{tabular}{C{2.4cm}C{3.6cm}C{2.4cm}}
+    \toprule
+    \textbf{Reference} & \textbf{Role} & \textbf{Value} \\
+    \midrule
+    VR1 & series $R_A$ (trimmer) & \SI{3.612}{\kilo\ohm} \\
+    R2 + R3 & series $R_B$ & \SI{3.770}{\kilo\ohm} \\
+    C6\,$\parallel$\,C7 & shunt $C_S = 2C$ & \SI{0.44}{\micro\farad} \\
+    C1, C5 & series $C_A$, $C_B$ & \SI{0.22}{\micro\farad} each \\
+    VR2 & shunt $R_S = R/2$ (trimmer) & \SI{1.8455}{\kilo\ohm} \\
+    R4, R5 & $Q$ divider & \SI{470}{\ohm}, \SI{68}{\kilo\ohm} \\
+    R7, R6 & gain setting & \SI{9}{\kilo\ohm}, \SI{1}{\kilo\ohm} \\
+    \bottomrule
+  \end{tabular}
+  \caption{Values that set the notch frequency, $Q$ and gain, from the KiCad board file. Trimmers are at their nominal settings.}
+  \label{tab:values}
+\end{table}
+
+\subsection{Bootstrapping for high Q}
+A balanced twin-T alone has $T(s) = (s^2+\omega_0^2)/(s^2+4\omega_0 s+\omega_0^2)$, a notch with $Q = 1/4$ that would cut almost an octave on each side of \SI{196}{\hertz}. Here buffer U2A copies the network's output, the divider scales it by $k = R_5/(R_4+R_5)$, and follower U2B drives the common node with $v_x = k\,v_\text{out}$. Because the network is linear, $v_\text{out} = T\,v_\text{in} + (1-T)\,v_x$, and solving for the closed-loop response gives
+\begin{align}
+  H(s) &= \frac{T}{1-k+kT} = \frac{s^2+\omega_0^2}{s^2 + 4(1-k)\,\omega_0 s + \omega_0^2}, \label{eq:H}\\
+  Q &= \frac{1}{4(1-k)} = \frac{1}{4}\left(1+\frac{R_5}{R_4}\right). \label{eq:Q}
+\end{align}
+The zeros are unchanged, so the notch frequency stays put while the poles move toward the $j\omega$ axis. With $R_4 = \SI{470}{\ohm}$ and $R_5 = \SI{68}{\kilo\ohm}$, $k = \num{0.99314}$ and $Q = \num{36.4}$, so the \SI{-3}{\decibel} bandwidth is $f_0/Q = \SI{5.38}{\hertz}$. The pair was chosen by targeting $Q \approx 36$ while reusing the \SI{470}{\ohm} value already in the design. Buffer U2A also drives the output through C8, which forms a \SI{0.016}{\hertz} high-pass corner with a \SI{1}{\mega\ohm} amplifier input. The full schematic is in \cref{fig:schematic}.
+
+\begin{sidewaysfigure}
+  \centering
+  \includegraphics[width=\textheight,trim=60.2pt 119.5pt 81.8pt 49.0pt,clip]{figures/schematic.pdf}
+  \caption{Complete schematic: notch filter at lower left, LM324 (U2) at centre, gain stage at lower right, LED indicator and TC7660 charge pump at top.}
+  \label{fig:schematic}
+\end{sidewaysfigure}
+
+% ---------------------------------------------------------------- 4
+\section{Analysis}\label{sec:analysis}
+The four-layer board has not yet been measured, so its behaviour was predicted with a modified nodal analysis of the board's own netlist. A Python script reads every component value and pad connection from the \texttt{.kicad\_pcb} file, so the model cannot drift from the layout. Each LM324 section is modelled as a single-pole amplifier with \SI{100}{\decibel} of DC gain and a \SI{1}{\mega\hertz} unity-gain bandwidth~\cite{lm324}, driving a \SI{1}{\mega\ohm} amplifier input.
+
+\Cref{fig:wideband,fig:zoom} and \cref{tab:metrics} summarise the result. Away from the notch the gain stays within \SI{0.03}{\decibel} of \SI{20.0}{\decibel} from \SI{20}{\hertz} to \SI{5}{\kilo\hertz}, falling to \SI{19.8}{\decibel} at \SI{20}{\kilo\hertz}. The null reaches \SI{-41.6}{\decibel} at \SI{196.02}{\hertz}. Its finite depth is the \SI{0.85}{\ohm} imbalance found above, and the open-G fundamental, \SI{0.02}{\hertz} away, is cut by \SI{38.8}{\decibel}. The \SI{-3}{\decibel} points at \SI{193.49}{\hertz} and \SI{198.89}{\hertz} give $Q = \num{36.4}$, as \cref{eq:Q} predicts, and the neighbouring semitones lose only \SI{0.12}{\decibel} and \SI{0.34}{\decibel}. Ideal op-amps give the same frequency and depth within \SI{0.03}{\decibel}, and at \SI{196}{\hertz} each LM324 section still has about \SI{74}{\decibel} of open-loop gain. A KiCad SPICE simulation of the same schematic agrees: it gives a \SI{-3}{\decibel} bandwidth of about \SI{5.38}{\hertz}, $Q \approx \num{36.4}$ and a minimum near \SI{-41}{\decibel} relative to the passband.
+
+\begin{figure}[!tb]
+  \centering
+  \includegraphics[width=0.88\textwidth]{figures/fig_response_wideband.pdf}
+  \caption{Predicted magnitude and phase from input to output. Dashed lines mark the six open-string fundamentals of a standard-tuned guitar. Only G3 falls in the notch.}
+  \label{fig:wideband}
+\end{figure}
+
+\begin{figure}[!tb]
+  \centering
+  \includegraphics[width=0.88\textwidth]{figures/fig_response_zoom.pdf}
+  \caption{Notch detail relative to the passband. The shaded band, only \SI{0.54}{\hertz} wide, is where the cut exceeds \SI{20}{\decibel}. Squares mark the neighbouring semitones.}
+  \label{fig:zoom}
+\end{figure}
+
+\begin{table}[!tb]
+  \centering\small
+  \begin{tabular}{C{2.6cm}C{2.6cm}C{2.7cm}C{2.4cm}}
+    \toprule
+    \textbf{Quantity} & \textbf{Predicted} & \textbf{Quantity} & \textbf{Predicted} \\
+    \midrule
+    Passband gain & \SI{20.0}{\decibel} & Lower $-3$\,dB point & \SI{193.49}{\hertz} \\
+    Notch minimum & \SI{196.02}{\hertz} & Upper $-3$\,dB point & \SI{198.89}{\hertz} \\
+    Depth re passband & \SI{-41.6}{\decibel} & Bandwidth & \SI{5.39}{\hertz} \\
+    Cut at G3 & \SI{-38.8}{\decibel} & Quality factor $Q$ & \num{36.4} \\
+    \sharpn{F}3 / \sharpn{G}3 & \SI{-0.12}{\decibel} / \SI{-0.34}{\decibel} & $\geq$\SI{20}{\decibel} range & \SIrange{195.75}{196.29}{\hertz} \\
+    \bottomrule
+  \end{tabular}
+  \caption{Predicted performance from the LM324 circuit model.}
+  \label{tab:metrics}
+\end{table}
+
+% ---------------------------------------------------------------- 5
+\section{PCB design}\label{sec:pcb}
+The board measures \qtyproduct{35.56 x 22.86}{\milli\metre}, exactly the required \qtyproduct{1.4 x 0.9}{in}, and uses four copper layers in a \SI{1.6}{\milli\metre} FR-4 stack (\cref{tab:stackup}). Thin prepreg puts every top-layer component \SI{0.1}{\milli\metre} above the ground plane. Four \SI{3.05}{\milli\metre} mounting holes sit on a \qtyproduct{1.2 x 0.7}{in} grid with \SI{5.59}{\milli\metre} keep-out circles. Tracks are mostly \SIlist{0.20;0.25}{\milli\metre} wide (one segment is \SI{0.35}{\milli\metre}) with \SI{0.2}{\milli\metre} default clearance, and the pours keep \SI{0.5}{\milli\metre} from other nets, joining pads through \SI{0.5}{\milli\metre} thermal-relief spokes.
+
+\begin{table}[!tb]
+  \centering\small
+  \begin{tabular}{C{1.8cm}C{5.6cm}C{2.0cm}}
+    \toprule
+    \textbf{Layer} & \textbf{Use} & \textbf{Thickness} \\
+    \midrule
+    F.Cu & components, all signal routing & \SI{35}{\micro\metre} \\
+    Prepreg & FR-4, $\varepsilon_r = 4.5$ & \SI{0.10}{\milli\metre} \\
+    In1.Cu & solid GND plane & \SI{35}{\micro\metre} \\
+    Core & FR-4, $\varepsilon_r = 4.5$ & \SI{1.24}{\milli\metre} \\
+    In2.Cu & split plane: $V_+$ pours, $V_-$ island & \SI{35}{\micro\metre} \\
+    Prepreg & FR-4, $\varepsilon_r = 4.5$ & \SI{0.10}{\milli\metre} \\
+    B.Cu & vias and through-hole pads only & \SI{35}{\micro\metre} \\
+    \midrule
+    Total & incl.\ \SI{10}{\micro\metre} mask per side & \SI{1.60}{\milli\metre} \\
+    \bottomrule
+  \end{tabular}
+  \caption{Layer stack-up from the KiCad board setup.}
+  \label{tab:stackup}
+\end{table}
+
+\begin{figure}[!tb]
+  \centering
+  \includegraphics[width=0.88\textwidth]{figures/fig_pcb_layers.pdf}
+  \caption{The four copper layers, drawn directly from the \texttt{.kicad\_pcb} file and coloured by net. White circles are drill holes; gaps around holes in the planes are clearances, and the crosses are thermal reliefs.}
+  \label{fig:layers}
+\end{figure}
+
+As a design challenge, every component was placed on one side of the board. The aim was to keep trace lengths as short as possible while putting every part that is touched after assembly, the two trimmers and the headers for the jacks, battery, switch and LED, on that same side. The top side therefore carries all 24 parts: 17 surface-mount parts (fifteen 0805 passives, the SOIC-14 LM324 and the SOIC-8 TC7660) and seven through-hole parts (two trimmers and five 2-pin headers). The silkscreen divides it into Charge Pump, LED and Amplifier areas (\cref{fig:hero}). The battery, switch, output and input headers line the top edge, and the two top-adjust trimmers sit at the top right, directly above the twin-T parts they tune. The twin-T is grouped beside the op-amp to keep its high-impedance nodes short, with the charge pump on the opposite side of the board.
+
+\Cref{fig:layers} shows the layer split. Every signal is routed on F.Cu, in 82 segments totalling \SI{127}{\milli\metre}. In1.Cu is an uninterrupted ground plane, and In2.Cu carries $V_+$ as two pours around a $V_-$ island under the op-amp and charge-pump area, so both rails reach the LM324 with low impedance. Ten vias (\SI{0.8}{\milli\metre} pad, \SI{0.4}{\milli\metre} drill) take the surface-mount supply pins to the planes: four for GND, three for $V_+$ and three for $V_-$. B.Cu carries no routing.
+
+% ---------------------------------------------------------------- 6
+\section{Prototype verification}\label{sec:verify}
+The circuit was prototyped on a breadboard with DIP versions of the LM324 and TC7660 and the same Bourns 3296W trimmers (\cref{fig:proto}). An Agilent 33500B generator supplied a \SI{196.000}{\hertz} sine set to \SI{400}{\milli\volt}\textsubscript{pp} for a \SI{50}{\ohm} load, which appears as about \SI{0.8}{\volt}\textsubscript{pp} at the high-impedance input. A Tektronix TDS2012B showed the input on CH1 at \SI{200}{\milli\volt} per division and the output on CH2 at \SI{2}{\volt} per division, and its counter read \SI{195.997}{\hertz}. The output trace is almost flat. Fitting a \SI{196}{\hertz} sinusoid to that trace in the photograph gives about \SI{0.27}{\volt}\textsubscript{pp}, against the roughly \SI{8}{\volt}\textsubscript{pp} that the $\times10$ gain stage would otherwise produce. That is about \SI{29}{\decibel} of suppression, comfortably beyond the \SI{20}{\decibel} requirement. It is a single-frequency check read from a photograph rather than a swept measurement, but it confirms that the notch works at the target frequency.
+
+\begin{figure}[!tb]
+  \centering
+  \includegraphics[width=0.86\textwidth]{figures/fig_prototype.jpg}
+  \caption{Breadboard prototype. Left: the circuit with DIP LM324 and TC7660 and two 3296W trimmers. Top right: the generator set to \SI{196.000}{\hertz}. Bottom right: the oscilloscope, with the input on CH1 (yellow, \SI{200}{\milli\volt}/div) and the output on CH2 (cyan, \SI{2}{\volt}/div).}
+  \label{fig:proto}
+\end{figure}
+
+% ---------------------------------------------------------------- 7
+\section{Conclusion}
+The module meets its requirements in analysis, in simulation and on a breadboard. A \SI{20}{\decibel} gain stage, a twin-T network bootstrapped to $Q = \num{36.4}$ and a charge-pumped \SI{\pm9}{\volt} supply fit on a \qtyproduct{1.4 x 0.9}{in} four-layer board, and a model built from that board's netlist predicts \SI{38.8}{\decibel} of cut for the open G string and under \SI{0.4}{\decibel} for the notes beside it. The breadboard prototype cut a \SI{196}{\hertz} tone by about \SI{29}{\decibel}.
+
+\FloatBarrier
+\begin{thebibliography}{9}\small
+\bibitem{lm324} Texas Instruments, \emph{LMx24, LMx24x, LMx24xx, LM2902x Quadruple Operational Amplifiers}, datasheet SLOS066. \url{https://www.ti.com/lit/gpn/lm324}
+\bibitem{tc7660} Microchip Technology, \emph{TC7660 Charge Pump DC-to-DC Voltage Converter}, datasheet DS21465C.
+\bibitem{bourns} Bourns, \emph{3296 Series Trimming Potentiometer} (3296W-1-502RLF), datasheet.
+\bibitem{kicad} KiCad EDA, version 10.0. \url{https://www.kicad.org}
+\end{thebibliography}
+
+% ---------------------------------------------------------------- appendix
+\clearpage
+\appendix
+\section{Bill of materials}
+\begin{table}[!h]
+  \centering\footnotesize\renewcommand{\arraystretch}{1.05}
+  \begin{tabular}{C{2.6cm}C{0.8cm}C{2.2cm}C{4.6cm}}
+    \toprule
+    \textbf{Reference} & \textbf{Qty} & \textbf{Value} & \textbf{Part / footprint} \\
+    \midrule
+    U2 & 1 & LM324DR & quad op-amp, SOIC-14 \\
+    U1 & 1 & TC7660EOA & charge pump, SOIC-8 \\
+    VR1, VR2 & 2 & \SI{5}{\kilo\ohm} trimmer & Bourns 3296W-1-502RLF, 25-turn~\cite{bourns} \\
+    C1, C5, C6, C7 & 4 & \SI{0.22}{\micro\farad} & 0805 ceramic \\
+    C2, C3, C4, C8 & 4 & \SI{10}{\micro\farad} & 0805 ceramic \\
+    R1, R6 & 2 & \SI{1}{\kilo\ohm} & 0805 \\
+    R2 & 1 & \SI{3.3}{\kilo\ohm} & 0805 \\
+    R3, R4 & 2 & \SI{470}{\ohm} & 0805 \\
+    R5 & 1 & \SI{68}{\kilo\ohm} & 0805 \\
+    R7 & 1 & \SI{9}{\kilo\ohm} & 0805 \\
+    J1--J4 & 4 & 2-pin header & \SI{2.54}{\milli\metre}: on/off, \SI{9}{\volt}, IN, OUT \\
+    D1 & 1 & LED & off-board, via a \SI{2.54}{\milli\metre} 2-pin header \\
+    \bottomrule
+  \end{tabular}
+  \caption{Bill of materials (24 parts), from the KiCad board file~\cite{kicad}. All passives use KiCad's hand-solder 0805 footprints.}
+  \label{tab:bom}
+\end{table}
+
+\end{document}
