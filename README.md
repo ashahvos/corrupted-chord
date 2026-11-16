@@ -81,14 +81,3 @@ A vector copy is in [`hardware/exports/schematic.pdf`](hardware/exports/schemati
 ├── images/              README graphics
 └── report/              design report: PDF, LaTeX source and figures
 ```
-
-## Reproducing the analysis
-
-```bash
-pip install -r requirements.txt
-python analysis/figures.py         # writes images/*.png, report/figures/*.pdf, analysis/results.json
-python analysis/render_layers.py   # copper-layer figure
-cd report && pdflatex corrupted_chord_report.tex && pdflatex corrupted_chord_report.tex
-```
-
-The figures use a MATLAB-style layout with the Latin Modern serif font (installed with TeX) and fall back to DejaVu Serif otherwise. The schematic and board embed their symbols and footprints, so both open in KiCad 10 as-is. To see the custom 3D models in the 3D viewer, copy the project's `3dmodels/` folder (trimmer, op-amp and charge-pump STEP files) into `hardware/`.
